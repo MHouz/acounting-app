@@ -1,0 +1,55 @@
+Aight, let's zoom out and lay out the whole game plan — both how we build this and what the app actually is, end to end.
+
+## The App: AccountFlow (or whatever you name it)
+
+**What it is:** A simple, mobile-first PWA for accountants to manage clients, track services (prestations) they bill for, log partial payments, and auto-generate receipts. Single accountant per account, each accountant only sees his own data.
+
+**Who uses it:** You manually onboard accountants (no public signup) — they get a login, that's it.
+
+**Core flow:**
+1. Accountant logs in → lands on Dashboard
+2. Sets up his service catalog (e.g. "Déclaration TVA", "Tenue de comptabilité", with price + TVA rate)
+3. Adds a client
+4. Assigns one or more services to that client (price can be customized per client)
+5. As client pays, accountant logs each payment (partial or full)
+6. App calculates remaining balance automatically
+7. Each payment generates a downloadable PDF receipt with thank-you message
+8. Dashboard shows live numbers: revenue, pending payments, active clients, etc.
+
+## Pages/Screens
+
+- **Login** (Supabase Auth, no signup)
+- **Dashboard** (home) — stat cards + income chart + outstanding balances
+- **Clients** — list + search, click into a client detail page
+- **Client Detail** — contact info, services assigned, payment history, add service, log payment
+- **Services** — catalog management (CRUD: name, price, TVA toggle, TVA rate)
+- **Payments** — global payment log/history across all clients
+- **History** — activity timeline (client added, service added, payment logged, etc.)
+- **Reports** — later phase, not v1 priority
+- **Settings** — accountant's own profile, business name, maybe logo for receipts
+
+## Build Order (this matters — don't build everything at once in Bolt)
+
+Bolt works better in chunks. Here's how I'd sequence it:
+
+1. **Supabase setup first** — tables, RLS policies, auth. I'll write you the SQL, you run it in Supabase SQL editor before touching Bolt.
+2. **Login + Dashboard shell** — get auth working, confirm a logged-in accountant sees an empty dashboard.
+3. **Clients CRUD** — add/edit/view/delete clients.
+4. **Services catalog CRUD** — add/edit services with TVA.
+5. **Client detail page** — assign services to client, see balance.
+6. **Payments** — log payment against a client_service, auto-update remaining balance.
+7. **PDF receipt generation** — jsPDF on payment logged.
+8. **Dashboard wiring** — connect real Supabase queries to the stat cards/chart (this should come after data exists so you can actually test the numbers).
+9. **PWA polish** — manifest, mobile nav, install prompt.
+10. **Reports page** — last, nice-to-have.
+
+## How we'll work together
+
+- I write the Supabase SQL (tables + RLS) — you run it once in Supabase.
+- I write Bolt.new prompts **one chunk at a time** (matching the build order above), not one giant mega-prompt. Bolt does better with focused asks, and you can test each piece before moving on.
+- When something breaks or looks wrong in Bolt's output, paste me the screenshot or error, I'll fix the prompt or tell you what to change directly in the code.
+- You flag anything accounting-wise that sounds off to you (since you said you don't know accounting well) — I'll double check the logic against how TVA/invoicing actually works in Morocco.
+
+---
+
+Sound good? If yes, I'll start with **step 1: the Supabase SQL** — tables + RLS, ready to paste into the SQL editor.
