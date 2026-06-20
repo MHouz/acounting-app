@@ -28,7 +28,10 @@ const ClientDetail: React.FC = () => {
   
   // Assign Service state
   const [selectedServiceId, setSelectedServiceId] = useState('');
-  const [customPrice, setCustomPrice] = useState('');
+  const [customServiceName, setCustomServiceName] = useState('');
+  const [customPriceHt, setCustomPriceHt] = useState('');
+  const [hasTva, setHasTva] = useState(false);
+  const [tvaRate, setTvaRate] = useState('20');
   
   // Log Payment state
   const [selectedClientServiceId, setSelectedClientServiceId] = useState('');
@@ -104,12 +107,19 @@ const ClientDetail: React.FC = () => {
     
     setSubmitting(true);
     try {
+      const ht = parseFloat(customPriceHt) || 0;
+      const rate = parseFloat(tvaRate) || 0;
+      const ttc = hasTva ? ht * (1 + rate / 100) : ht;
+
       const { error } = await supabase
         .from('client_services')
         .insert({
           client_id: id,
-          service_id: selectedServiceId,
-          price: parseFloat(customPrice),
+          service_id: selectedServiceId || null,
+          custom_name: customServiceName || null,
+          price: ttc,
+          has_tva: hasTva,
+          tva_rate: hasTva ? rate : null,
           status: 'pending'
         });
 
@@ -117,7 +127,10 @@ const ClientDetail: React.FC = () => {
       
       setIsServiceModalOpen(false);
       setSelectedServiceId('');
-      setCustomPrice('');
+      setCustomServiceName('');
+      setCustomPriceHt('');
+      setHasTva(false);
+      setTvaRate('20');
       await fetchClientData();
     } catch (err: any) {
       console.error('Error assigning service:', err);
@@ -182,13 +195,15 @@ const ClientDetail: React.FC = () => {
     setSelectedServiceId(sId);
     const service = availableServices.find(s => s.id === sId);
     if (service) {
-      // Calculate price including TVA if applicable
-      const price = service.has_tva 
-        ? service.default_price * (1 + service.tva_rate / 100) 
-        : service.default_price;
-      setCustomPrice(price.toString());
+      setCustomPriceHt(service.default_price.toString());
+      setHasTva(service.has_tva);
+      setTvaRate((service.tva_rate || 20).toString());
+      setCustomServiceName(service.name);
     } else {
-      setCustomPrice('');
+      setCustomPriceHt('');
+      setHasTva(false);
+      setTvaRate('20');
+      setCustomServiceName('');
     }
   };
 
@@ -325,7 +340,7 @@ const ClientDetail: React.FC = () => {
                   
                   return (
                     <tr key={cs.id} className="border-b border-slate-700/50 hover:bg-slate-700/30">
-                      <td className="p-4 font-medium">{cs.services?.name || 'Service inconnu'}</td>
+                      <td className="p-4 font-medium">{cs.custom_name || cs.services?.name || 'Service sur mesure'}</td>
                       <td className="p-4 text-slate-300">
                         {cs.created_at ? new Date(cs.created_at).toLocaleDateString('fr-FR') : '-'}
                       </td>
@@ -364,33 +379,91 @@ const ClientDetail: React.FC = () => {
             
             <form onSubmit={handleAssignService} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Service du catalogue</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Service du catalogue (Optionnel)</label>
                 <select 
-                  required
                   value={selectedServiceId}
                   onChange={handleServiceSelect}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
                 >
-                  <option value="">Sélectionnez un service...</option>
+                  <option value="">Nouveau service sur mesure (Aucun modèle)</option>
                   {availableServices.map(s => (
                     <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
               </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Nom du service</label>
+                <input 
+                  type="text" 
+                  required
+                  value={customServiceName}
+                  onChange={e => setCustomServiceName(e.target.value)}
+                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  placeholder="Ex: Tenue de comptabilité mensuelle"
+                />
+              </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Prix personnalisé TTC (MAD)</label>
+                <label className="block text-sm font-medium text-slate-300 mb-1">Prix personnalisé HT (MAD)</label>
                 <input 
                   type="number" 
                   required
                   min="0"
                   step="0.01"
-                  value={customPrice}
-                  onChange={e => setCustomPrice(e.target.value)}
+                  value={customPriceHt}
+                  onChange={e => setCustomPriceHt(e.target.value)}
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
                 />
-                <p className="text-xs text-slate-500 mt-1">Vous pouvez modifier le prix par défaut pour ce client.</p>
               </div>
+
+              <div className="flex items-center space-x-3">
+                <input
+                  type="checkbox"
+                  id="hasTva"
+                  checked={hasTva}
+                  onChange={e => setHasTva(e.target.checked)}
+                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-500 focus:ring-blue-500 focus:ring-offset-slate-800"
+                />
+                <label htmlFor="hasTva" className="text-sm font-medium text-slate-300">
+                  Appliquer la TVA
+                </label>
+              </div>
+
+              {hasTva && (
+                <div>
+                  <label className="block text-sm font-medium text-slate-300 mb-1">Taux de TVA (%)</label>
+                  <input
+                    type="number"
+                    required
+                    min="0"
+                    step="0.01"
+                    value={tvaRate}
+                    onChange={e => setTvaRate(e.target.value)}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  />
+                </div>
+              )}
+
+              {/* Show calculated TTC */}
+              {customPriceHt && (
+                <div className="bg-slate-900/50 p-4 rounded-lg border border-slate-700/50">
+                  <div className="flex justify-between text-sm text-slate-400 mb-1">
+                    <span>Prix HT :</span>
+                    <span>{Number(customPriceHt).toLocaleString()} MAD</span>
+                  </div>
+                  {hasTva && (
+                    <div className="flex justify-between text-sm text-slate-400 mb-2">
+                      <span>TVA ({tvaRate}%) :</span>
+                      <span>{(Number(customPriceHt) * (Number(tvaRate) / 100)).toLocaleString()} MAD</span>
+                    </div>
+                  )}
+                  <div className="flex justify-between font-bold text-white pt-2 border-t border-slate-700">
+                    <span>Total TTC :</span>
+                    <span>{(hasTva ? Number(customPriceHt) * (1 + Number(tvaRate) / 100) : Number(customPriceHt)).toLocaleString()} MAD</span>
+                  </div>
+                </div>
+              )}
 
               <div className="pt-4 flex justify-end space-x-3">
                 <button
@@ -402,7 +475,7 @@ const ClientDetail: React.FC = () => {
                 </button>
                 <button
                   type="submit"
-                  disabled={submitting || !selectedServiceId}
+                  disabled={submitting || !customServiceName}
                   className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2 rounded-lg transition-colors disabled:opacity-50"
                 >
                   {submitting ? 'Assignation...' : 'Assigner'}
@@ -439,7 +512,7 @@ const ClientDetail: React.FC = () => {
                     const remaining = cs.price - totalPaid;
                     return (
                       <option key={cs.id} value={cs.id}>
-                        {cs.services?.name} (Reste: {remaining.toLocaleString()} MAD)
+                        {cs.custom_name || cs.services?.name || 'Service sur mesure'} (Reste: {remaining.toLocaleString()} MAD)
                       </option>
                     );
                   })}

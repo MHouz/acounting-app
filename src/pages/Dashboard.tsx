@@ -22,7 +22,8 @@ type PaymentRow = {
   payment_date: string;
   client_service_id: string;
   client_services: {
-    service_id: string;
+    custom_name?: string | null;
+    service_id: string | null;
     services: {
       name: string;
     } | null;
@@ -172,6 +173,7 @@ const Dashboard: React.FC = () => {
             payment_date,
             client_service_id,
             client_services!inner (
+              custom_name,
               service_id,
               services (
                 name
@@ -523,7 +525,7 @@ const Dashboard: React.FC = () => {
                     </td>
                     <td className="py-4">
                       {/* @ts-ignore */}
-                      {payment.client_services?.services?.name || 'Service inconnu'}
+                      {payment.client_services?.custom_name || payment.client_services?.services?.name || 'Service inconnu'}
                     </td>
                     <td className="py-4 font-medium text-emerald-400">
                       {Number(payment.amount).toLocaleString()} MAD

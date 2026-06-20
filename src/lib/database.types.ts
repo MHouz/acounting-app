@@ -42,26 +42,35 @@ export type Database = {
         Row: {
           client_id: string
           created_at: string | null
+          custom_name: string | null
+          has_tva: boolean | null
           id: string
           price: number
-          service_id: string
+          service_id: string | null
           status: string | null
+          tva_rate: number | null
         }
         Insert: {
           client_id: string
           created_at?: string | null
+          custom_name?: string | null
+          has_tva?: boolean | null
           id?: string
           price: number
-          service_id: string
+          service_id?: string | null
           status?: string | null
+          tva_rate?: number | null
         }
         Update: {
           client_id?: string
           created_at?: string | null
+          custom_name?: string | null
+          has_tva?: boolean | null
           id?: string
           price?: number
-          service_id?: string
+          service_id?: string | null
           status?: string | null
+          tva_rate?: number | null
         }
         Relationships: [
           {
