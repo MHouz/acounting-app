@@ -25,10 +25,13 @@ const Payments: React.FC = () => {
   const [payments, setPayments] = useState<PaymentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [accountantName, setAccountantName] = useState('');
-  const [businessName, setBusinessName] = useState('');
-  const [accountantEmail, setAccountantEmail] = useState('');
-  const [accountantPhone, setAccountantPhone] = useState('');
+  
+  // TODO: Hardcoded accountant details for PDF receipt generation
+  // Replace these later when missing columns (like phone) are added to the database
+  const accountantName = "Ali Alaoui";
+  const businessName = "Cabinet Ali Alaoui Comptabilité";
+  const accountantEmail = "contact@alialaoui.ma";
+  const accountantPhone = "+212 661-225797";
 
   useEffect(() => {
     fetchPayments();
@@ -40,15 +43,12 @@ const Payments: React.FC = () => {
     try {
       const { data } = await supabase
         .from('accountants')
-        .select('full_name, business_name, email, phone')
+        .select('full_name, business_name, email')
         .eq('id', session.user.id)
         .single();
       
       if (data) {
-        setAccountantName(data.full_name || 'Comptable');
-        setBusinessName(data.business_name || '');
-        setAccountantEmail(data.email || '');
-        setAccountantPhone(data.phone || '');
+        // Values are currently hardcoded above for PDF generation
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
