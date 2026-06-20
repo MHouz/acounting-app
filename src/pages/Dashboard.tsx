@@ -154,58 +154,43 @@ const Dashboard: React.FC = () => {
 
         if (clientsError) throw clientsError;
 
-        // Fetch Services
-        const { data: services, error: servicesError } = await supabase
-          .from('services')
-          .select('id')
-          .eq('accountant_id', accountantId);
-          
-        if (servicesError) throw servicesError;
-        const serviceIds = services?.map(s => s.id) || [];
-
         // Fetch Client Services
-        let clientServices: any[] = [];
-        if (serviceIds.length > 0) {
-          const { data: cs, error: csError } = await supabase
-            .from('client_services')
-            .select('id, price, status')
-            .in('service_id', serviceIds);
-            
-          if (csError) throw csError;
-          clientServices = cs || [];
-        }
+        const { data: csData, error: csError } = await supabase
+          .from('client_services')
+          .select(`id, price, status, clients!inner(accountant_id)`)
+          .eq('clients.accountant_id', accountantId);
+          
+        if (csError) throw csError;
+        const clientServices = csData || [];
         
         // Fetch Payments
-        let allPayments: any[] = [];
+        const { data: pmtsData, error: pmtsError } = await supabase
+          .from('payments')
+          .select(`
+            id,
+            amount,
+            payment_date,
+            client_service_id,
+            client_services!inner (
+              service_id,
+              services (
+                name
+              ),
+              client_id,
+              clients!inner (
+                name, accountant_id
+              )
+            )
+          `)
+          .eq('client_services.clients.accountant_id', accountantId)
+          .order('payment_date', { ascending: false });
+          
+        if (pmtsError) throw pmtsError;
+        const allPayments = pmtsData || [];
+        setRecentPayments(allPayments.slice(0, 5));
+
         const csIds = clientServices.map(cs => cs.id);
         setClientServiceIds(csIds);
-        
-        if (csIds.length > 0) {
-          const { data: pmts, error: pmtsError } = await supabase
-            .from('payments')
-            .select(`
-              id,
-              amount,
-              payment_date,
-              client_service_id,
-              client_services (
-                service_id,
-                services (
-                  name
-                ),
-                client_id,
-                clients (
-                  name
-                )
-              )
-            `)
-            .in('client_service_id', csIds)
-            .order('payment_date', { ascending: false });
-            
-          if (pmtsError) throw pmtsError;
-          allPayments = pmts || [];
-          setRecentPayments(allPayments.slice(0, 5));
-        }
 
         // Calculate Stats
         const totalRevenue = clientServices.reduce((sum, cs) => sum + (Number(cs.price) || 0), 0);
@@ -235,8 +220,9 @@ const Dashboard: React.FC = () => {
           pendingInvoices
         });
 
-      } catch (err) {
+      } catch (err: any) {
         console.error('Error fetching dashboard data', err);
+        alert('Erreur lors du chargement du tableau de bord: ' + err.message);
       } finally {
         setLoading(false);
       }
@@ -257,8 +243,11 @@ const Dashboard: React.FC = () => {
       try {
         const { data: pmts, error } = await supabase
           .from('payments')
-          .select('amount, payment_date')
-          .in('client_service_id', clientServiceIds)
+          .select(`
+            amount, payment_date,
+            client_services!inner(clients!inner(accountant_id))
+          `)
+          .eq('client_services.clients.accountant_id', session.user.id)
           .gte('payment_date', dateRange.from)
           .lte('payment_date', dateRange.to)
           .order('payment_date', { ascending: true });

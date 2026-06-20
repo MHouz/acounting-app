@@ -53,49 +53,25 @@ const Payments: React.FC = () => {
   const fetchPayments = async () => {
     if (!session?.user?.id) return;
     try {
-      // First get all clients for this accountant to filter payments
-      const { data: clients } = await supabase
-        .from('clients')
-        .select('id')
-        .eq('accountant_id', session.user.id);
-        
-      if (!clients || clients.length === 0) {
-        setLoading(false);
-        return;
-      }
-      
-      const clientIds = clients.map(c => c.id);
-
-      const { data: clientServices } = await supabase
-        .from('client_services')
-        .select('id')
-        .in('client_id', clientIds);
-
-      if (!clientServices || clientServices.length === 0) {
-        setLoading(false);
-        return;
-      }
-
-      const csIds = clientServices.map(cs => cs.id);
-
       const { data, error } = await supabase
         .from('payments')
         .select(`
           *,
-          client_services (
+          client_services!inner (
             service_id,
             services (name),
             client_id,
-            clients (name, company)
+            clients!inner (name, company, accountant_id)
           )
         `)
-        .in('client_service_id', csIds)
+        .eq('client_services.clients.accountant_id', session.user.id)
         .order('payment_date', { ascending: false });
         
       if (error) throw error;
       setPayments((data as any) || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching payments:', err);
+      alert('Erreur lors du chargement des paiements: ' + err.message);
     } finally {
       setLoading(false);
     }

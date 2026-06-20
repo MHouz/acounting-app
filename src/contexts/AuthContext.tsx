@@ -24,9 +24,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(async ({ data: { session } }) => {
       setSession(session);
-      setUser(session?.user ?? null);
+      if (session) {
+        const { data: { user } } = await supabase.auth.getUser();
+        setUser(user ?? null);
+      } else {
+        setUser(null);
+      }
       setLoading(false);
     });
 

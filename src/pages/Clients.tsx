@@ -40,8 +40,9 @@ const Clients: React.FC = () => {
       
       if (error) throw error;
       setClients(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching clients:', err);
+      alert('Erreur lors du chargement des clients: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -107,9 +108,9 @@ const Clients: React.FC = () => {
 
       await fetchClients();
       closeModal();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving client:', err);
-      alert('Une erreur est survenue lors de la sauvegarde.');
+      alert('Une erreur est survenue lors de la sauvegarde: ' + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -128,9 +129,9 @@ const Clients: React.FC = () => {
       if (error) throw error;
       
       setClients(clients.filter(c => c.id !== id));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error deleting client:', err);
-      alert('Erreur lors de la suppression.');
+      alert('Erreur lors de la suppression: ' + err.message);
     }
   };
 

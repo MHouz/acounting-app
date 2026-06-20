@@ -73,8 +73,9 @@ const ClientDetail: React.FC = () => {
       if (servicesError) throw servicesError;
       setClientServices((servicesData as any) || []);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching client data:', err);
+      alert('Erreur lors du chargement des données: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -91,8 +92,9 @@ const ClientDetail: React.FC = () => {
         
       if (error) throw error;
       setAvailableServices(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching services:', err);
+      alert('Erreur lors du chargement des services: ' + err.message);
     }
   };
 
@@ -117,9 +119,9 @@ const ClientDetail: React.FC = () => {
       setSelectedServiceId('');
       setCustomPrice('');
       await fetchClientData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error assigning service:', err);
-      alert('Erreur lors de l\'assignation du service');
+      alert('Erreur lors de l\'assignation du service: ' + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -167,9 +169,9 @@ const ClientDetail: React.FC = () => {
       setPaymentAmount('');
       setPaymentNotes('');
       await fetchClientData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error logging payment:', err);
-      alert('Erreur lors de l\'enregistrement du paiement');
+      alert('Erreur lors de l\'enregistrement du paiement: ' + err.message);
     } finally {
       setSubmitting(false);
     }

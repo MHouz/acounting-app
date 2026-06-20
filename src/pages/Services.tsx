@@ -35,8 +35,9 @@ const Services: React.FC = () => {
       
       if (error) throw error;
       setServices(data || []);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching services:', err);
+      alert('Erreur lors du chargement des services: ' + err.message);
     } finally {
       setLoading(false);
     }
@@ -93,9 +94,9 @@ const Services: React.FC = () => {
 
       await fetchServices();
       closeModal();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving service:', err);
-      alert('Une erreur est survenue lors de la sauvegarde.');
+      alert('Une erreur est survenue lors de la sauvegarde: ' + err.message);
     } finally {
       setSubmitting(false);
     }
@@ -120,9 +121,9 @@ const Services: React.FC = () => {
       }
       
       setServices(services.filter(s => s.id !== id));
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error deleting service:', err);
-      alert('Erreur lors de la suppression.');
+      alert('Erreur lors de la suppression: ' + err.message);
     }
   };
 
