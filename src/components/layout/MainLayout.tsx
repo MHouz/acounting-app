@@ -19,12 +19,30 @@ const MainLayout: React.FC = () => {
     { name: 'Paiements', path: '/payments', icon: CreditCard },
   ];
 
+  // TODO: Replace with dynamic data from accountants table when multi-user is needed
+  const userProfile = {
+    name: "Ali Alaoui",
+    role: "Comptable agréé",
+    avatar: "/avatar.jpeg"
+  };
+
   return (
     <div className="flex h-screen bg-slate-900 text-slate-50">
       {/* Desktop Sidebar */}
       <aside className="hidden md:flex flex-col w-64 border-r border-slate-800 bg-slate-900 h-full">
         <div className="p-6">
-          <h1 className="text-2xl font-bold text-blue-500">AccountFlow</h1>
+          <div className="flex items-center space-x-4 mb-1">
+            <img 
+              src={userProfile.avatar} 
+              alt={userProfile.name} 
+              className="w-12 h-12 rounded-full border border-slate-700 object-cover"
+            />
+            <div>
+              <h2 className="text-lg font-bold text-slate-100 leading-tight">{userProfile.name}</h2>
+              <p className="text-sm text-slate-400">{userProfile.role}</p>
+            </div>
+          </div>
+          <p className="text-xs font-semibold text-slate-600 uppercase tracking-wider mt-4">AccountFlow</p>
         </div>
         
         <nav className="flex-1 px-4 space-y-2 mt-6">
@@ -65,7 +83,17 @@ const MainLayout: React.FC = () => {
         <div className="p-4 md:p-8 max-w-7xl mx-auto">
           {/* Mobile Header */}
           <div className="md:hidden flex justify-between items-center mb-6">
-            <h1 className="text-xl font-bold text-blue-500">AccountFlow</h1>
+            <div className="flex items-center space-x-3">
+              <img 
+                src={userProfile.avatar} 
+                alt={userProfile.name} 
+                className="w-10 h-10 rounded-full border border-slate-700 object-cover"
+              />
+              <div>
+                <h2 className="text-base font-bold text-slate-100 leading-tight">{userProfile.name}</h2>
+                <p className="text-xs text-slate-400">{userProfile.role}</p>
+              </div>
+            </div>
             <button onClick={handleLogout} className="p-2 text-slate-400 hover:text-slate-200">
               <LogOut className="w-5 h-5" />
             </button>

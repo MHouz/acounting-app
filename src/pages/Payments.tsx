@@ -7,7 +7,8 @@ import type { Database } from '../lib/database.types';
 
 type PaymentRow = Database['public']['Tables']['payments']['Row'] & {
   client_services: {
-    service_id: string;
+    custom_name?: string | null;
+    service_id: string | null;
     services: {
       name: string;
     } | null;
@@ -26,6 +27,8 @@ const Payments: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [accountantName, setAccountantName] = useState('');
   const [businessName, setBusinessName] = useState('');
+  const [accountantEmail, setAccountantEmail] = useState('');
+  const [accountantPhone, setAccountantPhone] = useState('');
 
   useEffect(() => {
     fetchPayments();
@@ -37,13 +40,15 @@ const Payments: React.FC = () => {
     try {
       const { data } = await supabase
         .from('accountants')
-        .select('full_name, business_name')
+        .select('full_name, business_name, email, phone')
         .eq('id', session.user.id)
         .single();
       
       if (data) {
         setAccountantName(data.full_name || 'Comptable');
         setBusinessName(data.business_name || '');
+        setAccountantEmail(data.email || '');
+        setAccountantPhone(data.phone || '');
       }
     } catch (err) {
       console.error('Error fetching profile:', err);
@@ -58,6 +63,7 @@ const Payments: React.FC = () => {
         .select(`
           *,
           client_services!inner (
+            custom_name,
             service_id,
             services (name),
             client_id,
@@ -88,9 +94,11 @@ const Payments: React.FC = () => {
       // @ts-ignore
       companyName: payment.client_services?.clients?.company || undefined,
       // @ts-ignore
-      serviceName: payment.client_services?.services?.name || 'Service',
+      serviceName: payment.client_services?.custom_name || payment.client_services?.services?.name || 'Service sur mesure',
       accountantName,
-      businessName
+      businessName,
+      accountantEmail,
+      accountantPhone
     });
   };
 
@@ -98,7 +106,7 @@ const Payments: React.FC = () => {
     // @ts-ignore
     const clientName = p.client_services?.clients?.name?.toLowerCase() || '';
     // @ts-ignore
-    const serviceName = p.client_services?.services?.name?.toLowerCase() || '';
+    const serviceName = (p.client_services?.custom_name || p.client_services?.services?.name || '').toLowerCase();
     const search = searchTerm.toLowerCase();
     
     return clientName.includes(search) || serviceName.includes(search);
@@ -152,7 +160,7 @@ const Payments: React.FC = () => {
                     </td>
                     <td className="p-4 text-slate-300">
                       {/* @ts-ignore */}
-                      {payment.client_services?.services?.name || '-'}
+                      {payment.client_services?.custom_name || payment.client_services?.services?.name || 'Service sur mesure'}
                     </td>
                     <td className="p-4 font-medium text-emerald-400">
                       {Number(payment.amount).toLocaleString()} MAD
