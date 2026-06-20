@@ -4,6 +4,10 @@ import { AuthProvider, useAuth } from './contexts/AuthContext';
 import MainLayout from './components/layout/MainLayout';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
+import Services from './pages/Services';
+import Clients from './pages/Clients';
+import ClientDetail from './pages/ClientDetail';
+import Payments from './pages/Payments';
 
 const ProtectedRoute = ({ children }: { children: React.ReactNode }) => {
   const { session, loading } = useAuth();
@@ -33,9 +37,10 @@ const App: React.FC = () => {
           <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="clients" element={<div className="text-white p-4">Clients (en construction)</div>} />
-            <Route path="services" element={<div className="text-white p-4">Services (en construction)</div>} />
-            <Route path="payments" element={<div className="text-white p-4">Paiements (en construction)</div>} />
+            <Route path="clients" element={<Clients />} />
+            <Route path="clients/:id" element={<ClientDetail />} />
+            <Route path="services" element={<Services />} />
+            <Route path="payments" element={<Payments />} />
           </Route>
           
           {/* Fallback for any unknown routes */}

@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users, UserCheck, TrendingUp, AlertCircle, CheckCircle2, Clock } from 'lucide-react';
+import { Users, UserCheck, TrendingUp, AlertCircle, CheckCircle2, Clock, Calendar, ChevronDown } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -33,6 +33,23 @@ type PaymentRow = {
   } | null;
 };
 
+const PRESETS = [
+  "Aujourd'hui",
+  "Hier",
+  "7 derniers jours",
+  "30 derniers jours",
+  "90 derniers jours",
+  "6 derniers mois",
+  "Cette année"
+];
+
+const formatDateToYMD = (date: Date) => {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 const Dashboard: React.FC = () => {
   const { session } = useAuth();
   const [stats, setStats] = useState({
@@ -47,6 +64,80 @@ const Dashboard: React.FC = () => {
   const [recentPayments, setRecentPayments] = useState<PaymentRow[]>([]);
   const [chartData, setChartData] = useState<{name: string, revenue: number}[]>([]);
   const [loading, setLoading] = useState(true);
+
+  // Date Picker State
+  const [dateRange, setDateRange] = useState(() => {
+    const today = new Date();
+    const from = new Date(today.getFullYear(), today.getMonth() - 5, 1);
+    return {
+      from: formatDateToYMD(from),
+      to: formatDateToYMD(today)
+    };
+  });
+  const [selectedPreset, setSelectedPreset] = useState("6 derniers mois");
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDateRange, setTempDateRange] = useState(dateRange);
+  const [tempPreset, setTempPreset] = useState(selectedPreset);
+  const [clientServiceIds, setClientServiceIds] = useState<string[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+
+  const toggleDatePicker = () => {
+    if (!showDatePicker) {
+      setTempDateRange(dateRange);
+      setTempPreset(selectedPreset);
+    }
+    setShowDatePicker(!showDatePicker);
+  };
+
+  const handlePresetClick = (preset: string) => {
+    const today = new Date();
+    let from = new Date();
+    let to = new Date();
+    
+    switch (preset) {
+      case "Aujourd'hui":
+        break;
+      case "Hier":
+        from.setDate(today.getDate() - 1);
+        to.setDate(today.getDate() - 1);
+        break;
+      case "7 derniers jours":
+        from.setDate(today.getDate() - 6);
+        break;
+      case "30 derniers jours":
+        from.setDate(today.getDate() - 29);
+        break;
+      case "90 derniers jours":
+        from.setDate(today.getDate() - 89);
+        break;
+      case "6 derniers mois":
+        from.setMonth(today.getMonth() - 5);
+        from.setDate(1);
+        break;
+      case "Cette année":
+        from = new Date(today.getFullYear(), 0, 1);
+        break;
+      default:
+        break;
+    }
+    
+    setTempDateRange({
+      from: formatDateToYMD(from),
+      to: formatDateToYMD(to)
+    });
+    setTempPreset(preset);
+  };
+
+  const handleDateChange = (type: 'from' | 'to', value: string) => {
+    setTempDateRange(prev => ({ ...prev, [type]: value }));
+    setTempPreset("Personnalisé");
+  };
+
+  const handleApply = () => {
+    setDateRange(tempDateRange);
+    setSelectedPreset(tempPreset);
+    setShowDatePicker(false);
+  };
 
   useEffect(() => {
     if (!session?.user?.id) return;
@@ -87,6 +178,7 @@ const Dashboard: React.FC = () => {
         // Fetch Payments
         let allPayments: any[] = [];
         const csIds = clientServices.map(cs => cs.id);
+        setClientServiceIds(csIds);
         
         if (csIds.length > 0) {
           const { data: pmts, error: pmtsError } = await supabase
@@ -116,8 +208,8 @@ const Dashboard: React.FC = () => {
         }
 
         // Calculate Stats
-        const totalRevenue = clientServices.reduce((sum, cs) => sum + (cs.price || 0), 0);
-        const totalPayments = allPayments.reduce((sum, p) => sum + (p.amount || 0), 0);
+        const totalRevenue = clientServices.reduce((sum, cs) => sum + (Number(cs.price) || 0), 0);
+        const totalPayments = allPayments.reduce((sum, p) => sum + (Number(p.amount) || 0), 0);
         const remainingPayments = totalRevenue - totalPayments;
         
         const now = new Date();
@@ -127,7 +219,7 @@ const Dashboard: React.FC = () => {
         const paidThisMonth = allPayments.reduce((sum, p) => {
           const pDate = new Date(p.payment_date);
           if (pDate.getMonth() === currentMonth && pDate.getFullYear() === currentYear) {
-            return sum + (p.amount || 0);
+            return sum + (Number(p.amount) || 0);
           }
           return sum;
         }, 0);
@@ -142,32 +234,6 @@ const Dashboard: React.FC = () => {
           paidThisMonth,
           pendingInvoices
         });
-        
-        // Prepare Chart Data (Last 6 months)
-        const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
-        const last6Months: { monthIndex: number, year: number, name: string, revenue: number }[] = [];
-        for (let i = 5; i >= 0; i--) {
-          const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-          last6Months.push({
-            monthIndex: d.getMonth(),
-            year: d.getFullYear(),
-            name: monthNames[d.getMonth()],
-            revenue: 0
-          });
-        }
-        
-        allPayments.forEach(p => {
-          const pDate = new Date(p.payment_date);
-          const monthIdx = pDate.getMonth();
-          const year = pDate.getFullYear();
-          
-          const monthData = last6Months.find(m => m.monthIndex === monthIdx && m.year === year);
-          if (monthData) {
-            monthData.revenue += Number(p.amount) || 0;
-          }
-        });
-        
-        setChartData(last6Months.map(m => ({ name: m.name, revenue: m.revenue })));
 
       } catch (err) {
         console.error('Error fetching dashboard data', err);
@@ -178,6 +244,87 @@ const Dashboard: React.FC = () => {
 
     fetchDashboardData();
   }, [session]);
+
+  // Chart Data Effect
+  useEffect(() => {
+    if (!session?.user?.id || clientServiceIds.length === 0) {
+      setChartData([]);
+      return;
+    }
+    
+    const fetchChartData = async () => {
+      setChartLoading(true);
+      try {
+        const { data: pmts, error } = await supabase
+          .from('payments')
+          .select('amount, payment_date')
+          .in('client_service_id', clientServiceIds)
+          .gte('payment_date', dateRange.from)
+          .lte('payment_date', dateRange.to)
+          .order('payment_date', { ascending: true });
+          
+        if (error) throw error;
+        
+        const payments = pmts || [];
+        
+        const fromDate = new Date(dateRange.from);
+        const toDate = new Date(dateRange.to);
+        const diffTime = Math.abs(toDate.getTime() - fromDate.getTime());
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+        
+        if (diffDays <= 30) {
+          // Group by day
+          const grouped: Record<string, number> = {};
+          
+          for (let d = new Date(fromDate); d <= toDate; d.setDate(d.getDate() + 1)) {
+            const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+            grouped[dateStr] = 0;
+          }
+          
+          payments.forEach(p => {
+            const dateStr = new Date(p.payment_date).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
+            if (grouped[dateStr] !== undefined) {
+              grouped[dateStr] += Number(p.amount) || 0;
+            } else {
+              grouped[dateStr] = Number(p.amount) || 0;
+            }
+          });
+          
+          setChartData(Object.entries(grouped).map(([name, revenue]) => ({ name, revenue })));
+        } else {
+          // Group by month
+          const grouped: Record<string, number> = {};
+          const monthNames = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+          
+          const startMonth = new Date(fromDate.getFullYear(), fromDate.getMonth(), 1);
+          const endMonth = new Date(toDate.getFullYear(), toDate.getMonth(), 1);
+          
+          for (let d = new Date(startMonth); d <= endMonth; d.setMonth(d.getMonth() + 1)) {
+            const monthStr = `${monthNames[d.getMonth()]} ${d.getFullYear() !== new Date().getFullYear() ? d.getFullYear() : ''}`.trim();
+            grouped[monthStr] = 0;
+          }
+          
+          payments.forEach(p => {
+            const pd = new Date(p.payment_date);
+            const monthStr = `${monthNames[pd.getMonth()]} ${pd.getFullYear() !== new Date().getFullYear() ? pd.getFullYear() : ''}`.trim();
+            if (grouped[monthStr] !== undefined) {
+              grouped[monthStr] += Number(p.amount) || 0;
+            } else {
+              grouped[monthStr] = Number(p.amount) || 0;
+            }
+          });
+          
+          setChartData(Object.entries(grouped).map(([name, revenue]) => ({ name, revenue })));
+        }
+      } catch (err) {
+        console.error('Error fetching chart data', err);
+      } finally {
+        setChartLoading(false);
+      }
+    };
+    
+    fetchChartData();
+  }, [clientServiceIds, dateRange, session]);
 
   if (loading) {
     return (
@@ -235,9 +382,87 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
         {/* Line Chart Panel */}
-        <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700">
-          <h3 className="text-lg font-bold text-white mb-6">Évolution des revenus (6 derniers mois)</h3>
-          <div className="h-72 w-full">
+        <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 relative">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
+            <h3 className="text-lg font-bold text-white">Évolution des revenus ({selectedPreset})</h3>
+            <div className="relative">
+              <button 
+                onClick={toggleDatePicker}
+                className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium border border-slate-600"
+              >
+                <Calendar className="w-4 h-4" />
+                <span>{selectedPreset === "Personnalisé" ? `${dateRange.from} au ${dateRange.to}` : selectedPreset}</span>
+                <ChevronDown className={`w-4 h-4 transition-transform ${showDatePicker ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showDatePicker && (
+                <div className="absolute right-0 mt-2 w-[320px] sm:w-[500px] bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
+                  <div className="flex flex-col sm:flex-row border-b border-slate-700">
+                    {/* Left Side: Presets */}
+                    <div className="w-full sm:w-1/3 border-b sm:border-b-0 sm:border-r border-slate-700 p-2 bg-slate-800/50 max-h-48 sm:max-h-none overflow-y-auto">
+                      {PRESETS.map(preset => (
+                        <button
+                          key={preset}
+                          onClick={() => handlePresetClick(preset)}
+                          className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-1 transition-colors ${
+                            tempPreset === preset 
+                              ? 'bg-blue-500 text-white font-medium' 
+                              : 'text-slate-300 hover:bg-slate-700'
+                          }`}
+                        >
+                          {preset}
+                        </button>
+                      ))}
+                    </div>
+                    {/* Right Side: Date Inputs */}
+                    <div className="w-full sm:w-2/3 p-6 flex flex-col justify-center space-y-6">
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Du</label>
+                        <input 
+                          type="date" 
+                          value={tempDateRange.from}
+                          onChange={(e) => handleDateChange('from', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          style={{ colorScheme: 'dark' }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Au</label>
+                        <input 
+                          type="date" 
+                          value={tempDateRange.to}
+                          onChange={(e) => handleDateChange('to', e.target.value)}
+                          className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          style={{ colorScheme: 'dark' }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  {/* Bottom: Actions */}
+                  <div className="p-4 bg-slate-900 flex justify-end space-x-3">
+                    <button 
+                      onClick={() => setShowDatePicker(false)}
+                      className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+                    >
+                      Annuler
+                    </button>
+                    <button 
+                      onClick={handleApply}
+                      className="px-4 py-2 text-sm font-medium bg-blue-600 hover:bg-blue-500 text-white rounded-lg transition-colors"
+                    >
+                      Appliquer
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+          <div className="h-72 w-full relative">
+            {chartLoading && (
+              <div className="absolute inset-0 flex items-center justify-center bg-slate-800/50 z-10 rounded-xl">
+                <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+              </div>
+            )}
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={chartData}>
                 <defs>
@@ -312,7 +537,7 @@ const Dashboard: React.FC = () => {
                       {payment.client_services?.services?.name || 'Service inconnu'}
                     </td>
                     <td className="py-4 font-medium text-emerald-400">
-                      {payment.amount.toLocaleString()} MAD
+                      {Number(payment.amount).toLocaleString()} MAD
                     </td>
                     <td className="py-4 text-slate-300">
                       {new Date(payment.payment_date).toLocaleDateString('fr-FR')}
