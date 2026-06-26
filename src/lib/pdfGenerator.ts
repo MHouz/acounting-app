@@ -1,5 +1,7 @@
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { save } from '@tauri-apps/plugin-dialog';
+import { writeFile } from '@tauri-apps/plugin-fs';
 
 interface ReceiptData {
   receiptNumber: string;
@@ -15,7 +17,8 @@ interface ReceiptData {
   accountantPhone?: string;
 }
 
-export const generateReceipt = (data: ReceiptData) => {
+export const generateReceipt = async (data: ReceiptData) => {
+  console.log('STEP 2 - Enter generateReceipt()');
   const doc = new jsPDF();
 
   // Header
@@ -76,7 +79,8 @@ export const generateReceipt = (data: ReceiptData) => {
   });
 
   // Total
-  const finalY = (doc as any).lastAutoTable.finalY || 120;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const finalY = (doc as any).lastAutoTable?.finalY || 120;
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
   doc.text('Montant Total Payé:', 120, finalY + 15);
@@ -106,5 +110,37 @@ export const generateReceipt = (data: ReceiptData) => {
   doc.text('Merci pour votre paiement et votre confiance.', 190, footY + 10, { align: 'right' });
 
   // Save the PDF
-  doc.save(`Recu_${data.receiptNumber}_${data.clientName.replace(/\s+/g, '_')}.pdf`);
+  const filename = `Recu_${data.receiptNumber}_${data.clientName.replace(/\s+/g, '_')}.pdf`;
+  
+  // @ts-expect-error - Tauri internal API
+  const isTauriEnv = !!window.__TAURI_INTERNALS__;
+  console.log(`STEP 3 - isTauri() = ${isTauriEnv}`);
+  
+  if (isTauriEnv) {
+    try {
+      console.log('STEP 4 - Opening Save Dialog');
+      const filePath = await save({
+        filters: [{
+          name: 'PDF',
+          extensions: ['pdf']
+        }],
+        defaultPath: filename
+      });
+      if (filePath) {
+        console.log(`STEP 5 - Selected Path = ${filePath}`);
+        const pdfBytes = doc.output('arraybuffer');
+        console.log(`STEP 6 - PDF ArrayBuffer Size = ${pdfBytes.byteLength}`);
+        console.log('STEP 7 - Calling writeFile()');
+        await writeFile(filePath, new Uint8Array(pdfBytes));
+        console.log('STEP 8 - writeFile returned successfully');
+      }
+    } catch (e: any) {
+      console.error('STEP FAILED - full exception:', e);
+      if (e instanceof Error) {
+        console.error('Stack trace:', e.stack);
+      }
+    }
+  } else {
+    doc.save(filename);
+  }
 };

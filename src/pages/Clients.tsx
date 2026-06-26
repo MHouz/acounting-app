@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { toast } from 'react-hot-toast';
 import { Plus, Edit2, Trash2, X, ChevronRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
@@ -9,11 +11,13 @@ type Client = Database['public']['Tables']['clients']['Row'];
 
 const Clients: React.FC = () => {
   const { session } = useAuth();
+  const { confirm } = useConfirm();
   const navigate = useNavigate();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
+  const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
 
   // Form state
   const [name, setName] = useState('');
@@ -22,12 +26,9 @@ const Clients: React.FC = () => {
   const [company, setCompany] = useState('');
   const [address, setAddress] = useState('');
   const [status, setStatus] = useState('active');
+  const [notificationTimer, setNotificationTimer] = useState('1');
   const [notes, setNotes] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  useEffect(() => {
-    fetchClients();
-  }, [session]);
 
   const fetchClients = async () => {
     if (!session?.user?.id) return;
@@ -40,13 +41,19 @@ const Clients: React.FC = () => {
       
       if (error) throw error;
       setClients(data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching clients:', err);
-      alert('Erreur lors du chargement des clients: ' + err.message);
+      toast.error('Erreur lors du chargement des clients: ' + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchClients();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
 
   const openModal = (client?: Client) => {
     if (client) {
@@ -57,6 +64,7 @@ const Clients: React.FC = () => {
       setCompany(client.company || '');
       setAddress(client.address || '');
       setStatus(client.status || 'active');
+      setNotificationTimer((client.notification_timer ?? 1).toString());
       setNotes(client.notes || '');
     } else {
       setEditingClient(null);
@@ -66,6 +74,7 @@ const Clients: React.FC = () => {
       setCompany('');
       setAddress('');
       setStatus('active');
+      setNotificationTimer('1');
       setNotes('');
     }
     setIsModalOpen(true);
@@ -89,6 +98,7 @@ const Clients: React.FC = () => {
         company: company || null,
         address: address || null,
         status,
+        notification_timer: parseInt(notificationTimer) || 1,
         notes: notes || null,
         accountant_id: session.user.id
       };
@@ -108,9 +118,9 @@ const Clients: React.FC = () => {
 
       await fetchClients();
       closeModal();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving client:', err);
-      alert('Une erreur est survenue lors de la sauvegarde: ' + err.message);
+      toast.error('Une erreur est survenue lors de la sauvegarde: ' + (err as Error).message);
     } finally {
       setSubmitting(false);
     }
@@ -118,7 +128,8 @@ const Clients: React.FC = () => {
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce client ? Toutes les données associées seront perdues.')) return;
+    const isConfirmed = await confirm({ title: 'Supprimer le client', message: 'Êtes-vous sûr de vouloir supprimer ce client ? Toutes les données associées seront perdues.' });
+    if (!isConfirmed) return;
     
     try {
       const { error } = await supabase
@@ -129,16 +140,18 @@ const Clients: React.FC = () => {
       if (error) throw error;
       
       setClients(clients.filter(c => c.id !== id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error deleting client:', err);
-      alert('Erreur lors de la suppression: ' + err.message);
+      toast.error('Erreur lors de la suppression: ' + (err as Error).message);
     }
   };
+
+  const filteredClients = clients.filter(c => c.status === activeTab);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Clients</h2>
+        <h2 className="text-2xl font-bold text-foreground">Clients</h2>
         <button 
           onClick={() => openModal()}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
@@ -148,37 +161,60 @@ const Clients: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+      <div className="flex space-x-2 mb-6">
+        <button
+          onClick={() => setActiveTab('active')}
+          className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+            activeTab === 'active' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Actifs ({clients.filter(c => c.status === 'active').length})
+        </button>
+        <button
+          onClick={() => setActiveTab('inactive')}
+          className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+            activeTab === 'inactive' 
+              ? 'bg-blue-600 text-white' 
+              : 'bg-card border border-border text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          Inactifs ({clients.filter(c => c.status === 'inactive').length})
+        </button>
+      </div>
+
+      <div className="bg-card rounded-2xl border border-border overflow-hidden">
         {loading ? (
           <div className="p-12 flex justify-center">
              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
-        ) : clients.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
-            Aucun client trouvé. Cliquez sur "Nouveau Client" pour commencer.
+        ) : filteredClients.length === 0 ? (
+          <div className="p-12 text-center text-muted-foreground">
+            Aucun client {activeTab === 'active' ? 'actif' : 'inactif'} trouvé.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-white">
+            <table className="w-full text-left text-foreground">
               <thead className="bg-slate-900/50">
                 <tr>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700">Nom du client</th>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700">Entreprise</th>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700">Contact</th>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700">Statut</th>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700 text-right">Actions</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border">Nom du client</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border">Entreprise</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border">Contact</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border">Statut</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {clients.map(client => (
+                {filteredClients.map(client => (
                   <tr 
                     key={client.id} 
                     onClick={() => navigate(`/clients/${client.id}`)}
                     className="border-b border-slate-700/50 hover:bg-slate-700/30 cursor-pointer"
                   >
                     <td className="p-4 font-medium">{client.name}</td>
-                    <td className="p-4 text-slate-300">{client.company || '-'}</td>
-                    <td className="p-4 text-slate-300">
+                    <td className="p-4 text-muted-foreground">{client.company || '-'}</td>
+                    <td className="p-4 text-muted-foreground">
                       <div className="text-sm">{client.email}</div>
                       <div className="text-sm">{client.phone}</div>
                     </td>
@@ -186,7 +222,7 @@ const Clients: React.FC = () => {
                       <span className={`px-2 py-1 rounded text-sm ${
                         client.status === 'active' 
                           ? 'bg-emerald-500/10 text-emerald-400' 
-                          : 'bg-slate-600/20 text-slate-400'
+                          : 'bg-slate-600/20 text-muted-foreground'
                       }`}>
                         {client.status === 'active' ? 'Actif' : 'Inactif'}
                       </span>
@@ -194,19 +230,19 @@ const Clients: React.FC = () => {
                     <td className="p-4 text-right">
                       <button 
                         onClick={(e) => { e.stopPropagation(); openModal(client); }}
-                        className="p-2 text-slate-400 hover:text-white transition-colors"
+                        className="p-2 text-muted-foreground hover:text-white transition-colors"
                         title="Modifier"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={(e) => handleDelete(client.id, e)}
-                        className="p-2 text-slate-400 hover:text-rose-500 transition-colors ml-2"
+                        className="p-2 text-muted-foreground hover:text-rose-500 transition-colors ml-2"
                         title="Supprimer"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
-                      <ChevronRight className="w-4 h-4 inline-block text-slate-500 ml-2" />
+                      <ChevronRight className="w-4 h-4 inline-block text-muted-foreground ml-2" />
                     </td>
                   </tr>
                 ))}
@@ -218,86 +254,99 @@ const Clients: React.FC = () => {
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50 overflow-y-auto">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-md my-8 relative">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700 sticky top-0 bg-slate-800 rounded-t-2xl z-10">
-              <h3 className="text-xl font-bold text-white">
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+          <div className="bg-card rounded-2xl border border-border w-full max-w-md max-h-[90vh] flex flex-col relative">
+            <div className="flex justify-between items-center p-6 border-b border-border shrink-0">
+              <h3 className="text-xl font-bold text-foreground">
                 {editingClient ? 'Modifier le client' : 'Nouveau client'}
               </h3>
-              <button onClick={closeModal} className="text-slate-400 hover:text-white">
+              <button type="button" onClick={closeModal} className="text-muted-foreground hover:text-white">
                 <X className="w-6 h-6" />
               </button>
             </div>
             
-            <form onSubmit={handleSubmit} className="p-6 space-y-4">
+            <div className="overflow-y-auto p-6">
+              <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Nom Complet</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Nom Complet</label>
                 <input 
                   type="text" 
                   required
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Entreprise</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Entreprise</label>
                 <input 
                   type="text" 
                   value={company}
                   onChange={e => setCompany(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Email</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Email</label>
                 <input 
                   type="email" 
                   value={email}
                   onChange={e => setEmail(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Téléphone</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Téléphone</label>
                 <input 
                   type="tel" 
                   value={phone}
                   onChange={e => setPhone(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Adresse</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Adresse</label>
                 <textarea 
                   value={address}
                   onChange={e => setAddress(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                   rows={2}
                 />
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Statut</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Statut</label>
                 <select
                   value={status}
                   onChange={e => setStatus(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                 >
                   <option value="active">Actif</option>
                   <option value="inactive">Inactif</option>
                 </select>
               </div>
 
+              <div>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Délai de notification (mois)</label>
+                <input 
+                  type="number" 
+                  min="1"
+                  required
+                  value={notificationTimer}
+                  onChange={e => setNotificationTimer(e.target.value)}
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
+                />
+              </div>
+
               <div className="pt-4 flex justify-end space-x-3">
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                  className="px-4 py-2 text-muted-foreground hover:text-white transition-colors"
                 >
                   Annuler
                 </button>
@@ -309,7 +358,8 @@ const Clients: React.FC = () => {
                   {submitting ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
               </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       )}

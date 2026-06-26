@@ -101,6 +101,7 @@ export type Database = {
           notes: string | null
           phone: string | null
           status: string | null
+          notification_timer: number | null
         }
         Insert: {
           accountant_id: string
@@ -113,6 +114,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           status?: string | null
+          notification_timer?: number | null
         }
         Update: {
           accountant_id?: string
@@ -125,6 +127,7 @@ export type Database = {
           notes?: string | null
           phone?: string | null
           status?: string | null
+          notification_timer?: number | null
         }
         Relationships: [
           {

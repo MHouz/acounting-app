@@ -4,11 +4,18 @@ import tailwindcss from '@tailwindcss/vite'
 import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
+  clearScreen: false,
+  server: {
+    port: 5173,
+    strictPort: true,
+    host: true,
+  },
   plugins: [
     react(),
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'auto',
       manifest: {
         name: 'AccountFlow',
         short_name: 'AccountFlow',

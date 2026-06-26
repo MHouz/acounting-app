@@ -36,11 +36,11 @@ const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-900 flex flex-col justify-center items-center p-4">
-      <div className="w-full max-w-md bg-slate-800 rounded-2xl shadow-xl p-8 border border-slate-700">
+    <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4">
+      <div className="w-full max-w-md bg-card rounded-2xl shadow-xl p-8 border border-border">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold text-blue-500 mb-2">AccountFlow</h1>
-          <p className="text-slate-400">Connectez-vous à votre espace</p>
+          <p className="text-muted-foreground">Connectez-vous à votre espace</p>
         </div>
 
         {error && (
@@ -51,39 +51,40 @@ const Login: React.FC = () => {
 
         <form onSubmit={handleLogin} className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Adresse e-mail
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Mail className="h-5 w-5 text-slate-500" />
+                <Mail className="h-5 w-5 text-muted-foreground" />
               </div>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 placeholder="vous@exemple.com"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Mot de passe
             </label>
             <div className="relative">
               <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                <Lock className="h-5 w-5 text-slate-500" />
+                <Lock className="h-5 w-5 text-muted-foreground" />
               </div>
               <input
                 type="password"
                 required
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 bg-slate-900 border border-slate-700 rounded-lg text-slate-200 placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                className="w-full pl-10 pr-4 py-3 bg-background border border-border rounded-lg text-foreground placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                 placeholder="••••••••"
+                autoComplete="current-password"
               />
             </div>
           </div>

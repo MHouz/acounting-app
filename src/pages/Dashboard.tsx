@@ -1,20 +1,30 @@
-import React, { useEffect, useState } from 'react';
-import { Users, UserCheck, TrendingUp, AlertCircle, CheckCircle2, Clock, Calendar, ChevronDown } from 'lucide-react';
+import React, { useEffect, useState, useRef } from 'react';
+import { toast } from 'react-hot-toast';
+import { Users, UserCheck, TrendingUp, AlertCircle, CheckCircle2, Clock, Calendar, ChevronDown, Download, Bell, BellRing } from 'lucide-react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { generateIncomeReport } from '../lib/pdfReportGenerator';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { useSettings } from '../contexts/SettingsContext';
 
-const StatCard = ({ title, value, icon: Icon, colorClass }: { title: string, value: string | number, icon: any, colorClass: string }) => (
-  <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700">
+const StatCard = ({ title, value, icon: Icon, colorClass }: { title: string, value: string | number, icon: React.ElementType, colorClass: string }) => (
+  <div className="bg-card p-6 rounded-2xl border border-border">
     <div className="flex items-center justify-between mb-4">
-      <h3 className="text-slate-400 font-medium">{title}</h3>
+      <h3 className="text-muted-foreground font-medium">{title}</h3>
       <div className={`p-3 rounded-lg ${colorClass}`}>
         <Icon className="w-5 h-5" />
       </div>
     </div>
-    <div className="text-2xl font-bold text-white">{value}</div>
+    <div className="text-2xl font-bold text-foreground">{value}</div>
   </div>
 );
+
+type NotificationItem = {
+  id: string;
+  title: string;
+  message: string;
+  date: Date;
+};
 
 type PaymentRow = {
   id: string;
@@ -53,6 +63,7 @@ const formatDateToYMD = (date: Date) => {
 
 const Dashboard: React.FC = () => {
   const { session } = useAuth();
+  const { settings } = useSettings();
   const [stats, setStats] = useState({
     totalClients: 0,
     activeClients: 0,
@@ -81,6 +92,32 @@ const Dashboard: React.FC = () => {
   const [tempPreset, setTempPreset] = useState(selectedPreset);
   const [clientServiceIds, setClientServiceIds] = useState<string[]>([]);
   const [chartLoading, setChartLoading] = useState(false);
+  const [notifications, setNotifications] = useState<NotificationItem[]>([]);
+  const [showNotifications, setShowNotifications] = useState(false);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+
+  const notificationsRef = useRef<HTMLDivElement>(null);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+  const datePickerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (notificationsRef.current && !notificationsRef.current.contains(event.target as Node)) {
+        setShowNotifications(false);
+      }
+      if (exportMenuRef.current && !exportMenuRef.current.contains(event.target as Node)) {
+        setShowExportMenu(false);
+      }
+      if (datePickerRef.current && !datePickerRef.current.contains(event.target as Node)) {
+        setShowDatePicker(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, []);
 
   const toggleDatePicker = () => {
     if (!showDatePicker) {
@@ -93,7 +130,7 @@ const Dashboard: React.FC = () => {
   const handlePresetClick = (preset: string) => {
     const today = new Date();
     let from = new Date();
-    let to = new Date();
+    const to = new Date();
     
     switch (preset) {
       case "Aujourd'hui":
@@ -138,6 +175,80 @@ const Dashboard: React.FC = () => {
     setDateRange(tempDateRange);
     setSelectedPreset(tempPreset);
     setShowDatePicker(false);
+  };
+
+  const handleExportPDF = async (preset?: string) => {
+    console.log('STEP 1 - Button clicked (handleExportPDF)');
+    if (!session?.user?.id) return;
+    
+    let exportFrom = dateRange.from;
+    let exportTo = dateRange.to;
+    let exportLabel = selectedPreset === "Personnalisé" ? `${dateRange.from} au ${dateRange.to}` : selectedPreset;
+
+    if (preset) {
+      const today = new Date();
+      let from = new Date();
+      const to = new Date();
+      switch (preset) {
+        case "1 semaine":
+          from.setDate(today.getDate() - 7);
+          break;
+        case "1 mois":
+          from.setMonth(today.getMonth() - 1);
+          break;
+        case "6 mois":
+          from.setMonth(today.getMonth() - 6);
+          break;
+        case "1 an":
+          from.setFullYear(today.getFullYear() - 1);
+          break;
+      }
+      exportFrom = formatDateToYMD(from);
+      exportTo = formatDateToYMD(to);
+      exportLabel = preset;
+    }
+
+    try {
+      const { data: pmts, error } = await supabase
+        .from('payments')
+        .select(`
+          amount, payment_date, method,
+          client_services!inner(
+            custom_name,
+            services(name),
+            clients!inner(name, accountant_id)
+          )
+        `)
+        .eq('client_services.clients.accountant_id', session.user.id)
+        .gte('payment_date', exportFrom)
+        .lte('payment_date', exportTo)
+        .order('payment_date', { ascending: true });
+        
+      if (error) throw error;
+      
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const paymentsList = (pmts || []).map((p: any) => ({
+        date: p.payment_date,
+        clientName: p.client_services.clients.name,
+        serviceName: p.client_services.custom_name || p.client_services.services?.name || 'Service inconnu',
+        amount: Number(p.amount),
+        method: p.method || 'non spécifié'
+      }));
+
+      const totalIncome = paymentsList.reduce((sum, p) => sum + p.amount, 0);
+
+      await generateIncomeReport({
+        periodLabel: exportLabel,
+        totalIncome,
+        pendingIncome: stats.remainingPayments,
+        payments: paymentsList
+      });
+      toast.success('Rapport PDF généré avec succès');
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } catch (e: any) {
+      console.error(e);
+      toast.error('Erreur lors de l\'exportation : ' + e.message);
+    }
   };
 
   useEffect(() => {
@@ -222,9 +333,36 @@ const Dashboard: React.FC = () => {
           pendingInvoices
         });
 
+        // Calculate Notifications
+        if (clients && clients.length > 0) {
+          const newNotifications: NotificationItem[] = [];
+          clients.forEach(c => {
+            if (c.notification_timer) {
+              const clientPayments = allPayments.filter(p => p.client_services?.client_id === c.id);
+              let lastPaymentDate = c.created_at ? new Date(c.created_at) : now;
+              if (clientPayments.length > 0) {
+                lastPaymentDate = new Date(Math.max(...clientPayments.map(p => new Date(p.payment_date).getTime())));
+              }
+              const monthsSince = (now.getTime() - lastPaymentDate.getTime()) / (1000 * 60 * 60 * 24 * 30);
+              if (monthsSince >= c.notification_timer) {
+                newNotifications.push({
+                  id: c.id,
+                  title: `Rappel: ${c.name}`,
+                  message: clientPayments.length === 0 
+                    ? `Aucun paiement enregistré depuis la création (${c.notification_timer} mois)`
+                    : `Aucun paiement depuis plus de ${c.notification_timer} mois`,
+                  date: now
+                });
+              }
+            }
+          });
+          setNotifications(newNotifications);
+        }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } catch (err: any) {
         console.error('Error fetching dashboard data', err);
-        alert('Erreur lors du chargement du tableau de bord: ' + err.message);
+        toast.error('Erreur lors du chargement du tableau de bord: ' + err.message);
       } finally {
         setLoading(false);
       }
@@ -236,6 +374,7 @@ const Dashboard: React.FC = () => {
   // Chart Data Effect
   useEffect(() => {
     if (!session?.user?.id || clientServiceIds.length === 0) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setChartData([]);
       return;
     }
@@ -319,7 +458,7 @@ const Dashboard: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center h-64 text-white">
+      <div className="flex items-center justify-center h-64 text-foreground">
         <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
       </div>
     );
@@ -328,7 +467,81 @@ const Dashboard: React.FC = () => {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Tableau de bord</h2>
+        <h2 className="text-2xl font-bold text-foreground">Tableau de bord</h2>
+        <div className="flex items-center space-x-4">
+          
+          {/* Notifications */}
+          <div className="relative" ref={notificationsRef}>
+            <button
+              onClick={() => setShowNotifications(!showNotifications)}
+              className="relative p-2 text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <Bell className="w-6 h-6" />
+              {notifications.length > 0 && (
+                <span className="absolute top-1 right-1 w-2.5 h-2.5 bg-red-500 rounded-full border-2 border-background"></span>
+              )}
+            </button>
+            {showNotifications && (
+              <div className="absolute right-0 mt-2 w-80 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="p-4 border-b border-border flex items-center justify-between">
+                  <h3 className="font-bold text-foreground flex items-center">
+                    <BellRing className="w-4 h-4 mr-2 text-blue-500" />
+                    Notifications
+                  </h3>
+                  <span className="text-xs font-medium bg-blue-500/10 text-blue-500 px-2 py-1 rounded-full">
+                    {notifications.length} nouvelle(s)
+                  </span>
+                </div>
+                <div className="max-h-[300px] overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center text-sm text-muted-foreground">
+                      Aucune notification.
+                    </div>
+                  ) : (
+                    <div className="flex flex-col">
+                      {notifications.map((notif, index) => (
+                        <div key={index} className="p-4 border-b border-border/50 hover:bg-muted/50 transition-colors">
+                          <h4 className="text-sm font-bold text-foreground mb-1">{notif.title}</h4>
+                          <p className="text-xs text-muted-foreground">{notif.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Export Dropdown */}
+          <div className="relative" ref={exportMenuRef}>
+            <button
+              onClick={() => setShowExportMenu(!showExportMenu)}
+              className="flex items-center space-x-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg transition-colors font-medium text-sm"
+            >
+              <Download className="w-4 h-4" />
+              <span>Exporter PDF</span>
+              <ChevronDown className="w-4 h-4" />
+            </button>
+            {showExportMenu && (
+              <div className="absolute right-0 mt-2 w-48 bg-card border border-border rounded-xl shadow-2xl z-50 overflow-hidden">
+                <div className="py-1">
+                  {['1 semaine', '1 mois', '6 mois', '1 an'].map((preset) => (
+                    <button
+                      key={preset}
+                      onClick={() => {
+                        setShowExportMenu(false);
+                        handleExportPDF(preset);
+                      }}
+                      className="w-full text-left px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Stat Cards Grid */}
@@ -373,13 +586,14 @@ const Dashboard: React.FC = () => {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mt-8">
         {/* Line Chart Panel */}
-        <div className="lg:col-span-2 bg-slate-800 p-6 rounded-2xl border border-slate-700 relative">
+        {settings.showChart && (
+        <div className="lg:col-span-2 bg-card p-6 rounded-2xl border border-border relative">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4 sm:gap-0">
-            <h3 className="text-lg font-bold text-white">Évolution des revenus ({selectedPreset})</h3>
-            <div className="relative">
+            <h3 className="text-lg font-bold text-foreground">Évolution des revenus ({selectedPreset})</h3>
+            <div className="relative" ref={datePickerRef}>
               <button 
                 onClick={toggleDatePicker}
-                className="flex items-center space-x-2 bg-slate-700 hover:bg-slate-600 text-slate-200 px-4 py-2 rounded-lg transition-colors text-sm font-medium border border-slate-600"
+                className="flex items-center space-x-2 bg-muted hover:bg-slate-600 text-foreground px-4 py-2 rounded-lg transition-colors text-sm font-medium border border-muted"
               >
                 <Calendar className="w-4 h-4" />
                 <span>{selectedPreset === "Personnalisé" ? `${dateRange.from} au ${dateRange.to}` : selectedPreset}</span>
@@ -387,10 +601,10 @@ const Dashboard: React.FC = () => {
               </button>
 
               {showDatePicker && (
-                <div className="absolute right-0 mt-2 w-[320px] sm:w-[500px] bg-slate-800 border border-slate-600 rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
-                  <div className="flex flex-col sm:flex-row border-b border-slate-700">
+                <div className="absolute right-0 mt-2 w-[320px] sm:w-[500px] bg-card border border-muted rounded-xl shadow-2xl z-50 flex flex-col overflow-hidden">
+                  <div className="flex flex-col sm:flex-row border-b border-border">
                     {/* Left Side: Presets */}
-                    <div className="w-full sm:w-1/3 border-b sm:border-b-0 sm:border-r border-slate-700 p-2 bg-slate-800/50 max-h-48 sm:max-h-none overflow-y-auto">
+                    <div className="w-full sm:w-1/3 border-b sm:border-b-0 sm:border-r border-border p-2 bg-slate-800/50 max-h-48 sm:max-h-none overflow-y-auto">
                       {PRESETS.map(preset => (
                         <button
                           key={preset}
@@ -398,7 +612,7 @@ const Dashboard: React.FC = () => {
                           className={`w-full text-left px-3 py-2 rounded-lg text-sm mb-1 transition-colors ${
                             tempPreset === preset 
                               ? 'bg-blue-500 text-white font-medium' 
-                              : 'text-slate-300 hover:bg-slate-700'
+                              : 'text-muted-foreground hover:bg-muted'
                           }`}
                         >
                           {preset}
@@ -408,32 +622,32 @@ const Dashboard: React.FC = () => {
                     {/* Right Side: Date Inputs */}
                     <div className="w-full sm:w-2/3 p-6 flex flex-col justify-center space-y-6">
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Du</label>
+                        <label className="block text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Du</label>
                         <input 
                           type="date" 
                           value={tempDateRange.from}
                           onChange={(e) => handleDateChange('from', e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                          style={{ colorScheme: 'dark' }}
+                          className="w-full bg-background border border-border text-foreground rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          style={{ colorScheme: settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light' }}
                         />
                       </div>
                       <div>
-                        <label className="block text-xs font-medium text-slate-400 mb-2 uppercase tracking-wider">Au</label>
+                        <label className="block text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Au</label>
                         <input 
                           type="date" 
                           value={tempDateRange.to}
                           onChange={(e) => handleDateChange('to', e.target.value)}
-                          className="w-full bg-slate-900 border border-slate-700 text-white rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                          style={{ colorScheme: 'dark' }}
+                          className="w-full bg-background border border-border text-foreground rounded-lg px-4 py-2 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          style={{ colorScheme: settings.theme === 'dark' || (settings.theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light' }}
                         />
                       </div>
                     </div>
                   </div>
                   {/* Bottom: Actions */}
-                  <div className="p-4 bg-slate-900 flex justify-end space-x-3">
+                  <div className="p-4 bg-background flex justify-end space-x-3">
                     <button 
                       onClick={() => setShowDatePicker(false)}
-                      className="px-4 py-2 text-sm font-medium text-slate-300 hover:text-white transition-colors"
+                      className="px-4 py-2 text-sm font-medium text-muted-foreground hover:text-white transition-colors"
                     >
                       Annuler
                     </button>
@@ -475,15 +689,16 @@ const Dashboard: React.FC = () => {
             </ResponsiveContainer>
           </div>
         </div>
+        )}
 
         {/* Outstanding Balances Panel */}
-        <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 flex flex-col">
-          <h3 className="text-lg font-bold text-white mb-6">Paiements en attente</h3>
-          <div className="flex-1 flex flex-col items-center justify-center text-slate-500 py-12">
+        <div className={`bg-card p-6 rounded-2xl border border-border flex flex-col ${!settings.showChart ? 'lg:col-span-3' : ''}`}>
+          <h3 className="text-lg font-bold text-foreground mb-6">Paiements en attente</h3>
+          <div className="flex-1 flex flex-col items-center justify-center text-muted-foreground py-12">
             {stats.remainingPayments > 0 ? (
                <div className="text-center">
                   <AlertCircle className="w-12 h-12 mb-4 text-orange-500 mx-auto" />
-                  <p className="text-white text-xl font-bold">{stats.remainingPayments.toLocaleString()} MAD</p>
+                  <p className="text-foreground text-xl font-bold">{stats.remainingPayments.toLocaleString()} MAD</p>
                   <p className="text-sm mt-2">restant à percevoir</p>
                </div>
             ) : (
@@ -497,12 +712,12 @@ const Dashboard: React.FC = () => {
       </div>
 
       {/* Recent Payments Table */}
-      <div className="bg-slate-800 p-6 rounded-2xl border border-slate-700 mt-8">
-        <h3 className="text-lg font-bold text-white mb-6">Paiements récents</h3>
+      <div className="bg-card p-6 rounded-2xl border border-border mt-8">
+        <h3 className="text-lg font-bold text-foreground mb-6">Paiements récents</h3>
         <div className="overflow-x-auto">
           <table className="w-full text-left">
             <thead>
-              <tr className="border-b border-slate-700 text-slate-400">
+              <tr className="border-b border-border text-muted-foreground">
                 <th className="pb-4 font-medium">Client</th>
                 <th className="pb-4 font-medium">Service</th>
                 <th className="pb-4 font-medium">Montant</th>
@@ -512,25 +727,25 @@ const Dashboard: React.FC = () => {
             <tbody>
               {recentPayments.length === 0 ? (
                 <tr>
-                  <td colSpan={4} className="py-12 text-center text-slate-500">
+                  <td colSpan={4} className="py-12 text-center text-muted-foreground">
                     Aucun paiement
                   </td>
                 </tr>
               ) : (
                 recentPayments.map((payment) => (
-                  <tr key={payment.id} className="border-b border-slate-700/50 text-white hover:bg-slate-700/30">
+                  <tr key={payment.id} className="border-b border-slate-700/50 text-foreground hover:bg-muted/50">
                     <td className="py-4">
-                      {/* @ts-ignore */}
+
                       {payment.client_services?.clients?.name || 'Client inconnu'}
                     </td>
                     <td className="py-4">
-                      {/* @ts-ignore */}
+
                       {payment.client_services?.custom_name || payment.client_services?.services?.name || 'Service inconnu'}
                     </td>
                     <td className="py-4 font-medium text-emerald-400">
                       {Number(payment.amount).toLocaleString()} MAD
                     </td>
-                    <td className="py-4 text-slate-300">
+                    <td className="py-4 text-muted-foreground">
                       {new Date(payment.payment_date).toLocaleDateString('fr-FR')}
                     </td>
                   </tr>

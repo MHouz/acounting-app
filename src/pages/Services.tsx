@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { useConfirm } from '../contexts/ConfirmContext';
+import { toast } from 'react-hot-toast';
 import { Plus, Edit2, Trash2, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -20,10 +22,6 @@ const Services: React.FC = () => {
   const [tvaRate, setTvaRate] = useState('20');
   const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    fetchServices();
-  }, [session]);
-
   const fetchServices = async () => {
     if (!session?.user?.id) return;
     try {
@@ -35,14 +33,19 @@ const Services: React.FC = () => {
       
       if (error) throw error;
       setServices(data || []);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error fetching services:', err);
-      alert('Erreur lors du chargement des services: ' + err.message);
+      toast.error('Erreur lors du chargement des services: ' + (err as Error).message);
     } finally {
       setLoading(false);
     }
   };
 
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    fetchServices();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.user?.id]);
   const openModal = (service?: Service) => {
     if (service) {
       setEditingService(service);
@@ -94,16 +97,19 @@ const Services: React.FC = () => {
 
       await fetchServices();
       closeModal();
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error saving service:', err);
-      alert('Une erreur est survenue lors de la sauvegarde: ' + err.message);
+      toast.error('Une erreur est survenue lors de la sauvegarde: ' + (err as Error).message);
     } finally {
       setSubmitting(false);
     }
   };
 
+  const { confirm } = useConfirm();
+
   const handleDelete = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer ce service ?')) return;
+    const isConfirmed = await confirm({ title: 'Supprimer le service', message: 'Êtes-vous sûr de vouloir supprimer ce service ?' });
+    if (!isConfirmed) return;
     
     try {
       const { error } = await supabase
@@ -113,7 +119,7 @@ const Services: React.FC = () => {
         
       if (error) {
         if (error.code === '23503') {
-           alert('Impossible de supprimer ce service car il est assigné à des clients.');
+           toast.error('Impossible de supprimer ce service car il est assigné à des clients.');
         } else {
            throw error;
         }
@@ -121,16 +127,16 @@ const Services: React.FC = () => {
       }
       
       setServices(services.filter(s => s.id !== id));
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Error deleting service:', err);
-      alert('Erreur lors de la suppression: ' + err.message);
+      toast.error('Erreur lors de la suppression: ' + (err as Error).message);
     }
   };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-white">Catalogue des Services</h2>
+        <h2 className="text-2xl font-bold text-foreground">Catalogue des Services</h2>
         <button 
           onClick={() => openModal()}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
@@ -140,24 +146,24 @@ const Services: React.FC = () => {
         </button>
       </div>
 
-      <div className="bg-slate-800 rounded-2xl border border-slate-700 overflow-hidden">
+      <div className="bg-card rounded-2xl border border-border overflow-hidden">
         {loading ? (
           <div className="p-12 flex justify-center">
              <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
           </div>
         ) : services.length === 0 ? (
-          <div className="p-12 text-center text-slate-400">
+          <div className="p-12 text-center text-muted-foreground">
             Aucun service dans le catalogue. Cliquez sur "Nouveau Service" pour commencer.
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-left text-white">
+            <table className="w-full text-left text-foreground">
               <thead className="bg-slate-900/50">
                 <tr>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700">Nom du Service</th>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700">Prix par défaut</th>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700">TVA</th>
-                  <th className="p-4 font-medium text-slate-400 border-b border-slate-700 text-right">Actions</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border">Nom du Service</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border">Prix par défaut</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border">TVA</th>
+                  <th className="p-4 font-medium text-muted-foreground border-b border-border text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -171,7 +177,7 @@ const Services: React.FC = () => {
                           {service.tva_rate}%
                         </span>
                       ) : (
-                        <span className="bg-slate-600/20 text-slate-400 px-2 py-1 rounded text-sm">
+                        <span className="bg-slate-600/20 text-muted-foreground px-2 py-1 rounded text-sm">
                           Sans TVA
                         </span>
                       )}
@@ -179,14 +185,14 @@ const Services: React.FC = () => {
                     <td className="p-4 text-right">
                       <button 
                         onClick={() => openModal(service)}
-                        className="p-2 text-slate-400 hover:text-white transition-colors"
+                        className="p-2 text-muted-foreground hover:text-white transition-colors"
                         title="Modifier"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button 
                         onClick={() => handleDelete(service.id)}
-                        className="p-2 text-slate-400 hover:text-rose-500 transition-colors ml-2"
+                        className="p-2 text-muted-foreground hover:text-rose-500 transition-colors ml-2"
                         title="Supprimer"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -203,31 +209,31 @@ const Services: React.FC = () => {
       {/* Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
-          <div className="bg-slate-800 rounded-2xl border border-slate-700 w-full max-w-md overflow-hidden">
-            <div className="flex justify-between items-center p-6 border-b border-slate-700">
-              <h3 className="text-xl font-bold text-white">
+          <div className="bg-card rounded-2xl border border-border w-full max-w-md overflow-hidden">
+            <div className="flex justify-between items-center p-6 border-b border-border">
+              <h3 className="text-xl font-bold text-foreground">
                 {editingService ? 'Modifier le service' : 'Nouveau service'}
               </h3>
-              <button onClick={closeModal} className="text-slate-400 hover:text-white">
+              <button onClick={closeModal} className="text-muted-foreground hover:text-white">
                 <X className="w-6 h-6" />
               </button>
             </div>
             
             <form onSubmit={handleSubmit} className="p-6 space-y-4">
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Nom du service</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Nom du service</label>
                 <input 
                   type="text" 
                   required
                   value={name}
                   onChange={e => setName(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                   placeholder="ex: Tenue de comptabilité"
                 />
               </div>
               
               <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Prix par défaut (MAD)</label>
+                <label className="block text-sm font-medium text-muted-foreground mb-1">Prix par défaut (MAD)</label>
                 <input 
                   type="number" 
                   required
@@ -235,7 +241,7 @@ const Services: React.FC = () => {
                   step="0.01"
                   value={defaultPrice}
                   onChange={e => setDefaultPrice(e.target.value)}
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                  className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                   placeholder="ex: 1500"
                 />
               </div>
@@ -246,20 +252,20 @@ const Services: React.FC = () => {
                   id="hasTva"
                   checked={hasTva}
                   onChange={e => setHasTva(e.target.checked)}
-                  className="w-4 h-4 rounded border-slate-700 bg-slate-900 text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-800"
+                  className="w-4 h-4 rounded border-border bg-background text-blue-600 focus:ring-blue-500 focus:ring-offset-slate-800"
                 />
-                <label htmlFor="hasTva" className="text-sm font-medium text-slate-300">
+                <label htmlFor="hasTva" className="text-sm font-medium text-muted-foreground">
                   Appliquer la TVA
                 </label>
               </div>
 
               {hasTva && (
                 <div>
-                  <label className="block text-sm font-medium text-slate-300 mb-1">Taux de TVA (%)</label>
+                  <label className="block text-sm font-medium text-muted-foreground mb-1">Taux de TVA (%)</label>
                   <select
                     value={tvaRate}
                     onChange={e => setTvaRate(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-blue-500"
+                    className="w-full bg-background border border-border rounded-lg px-4 py-2 text-foreground focus:outline-none focus:border-blue-500"
                   >
                     <option value="20">20%</option>
                     <option value="10">10%</option>
@@ -272,7 +278,7 @@ const Services: React.FC = () => {
                 <button
                   type="button"
                   onClick={closeModal}
-                  className="px-4 py-2 text-slate-300 hover:text-white transition-colors"
+                  className="px-4 py-2 text-muted-foreground hover:text-white transition-colors"
                 >
                   Annuler
                 </button>
