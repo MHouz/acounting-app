@@ -83,7 +83,9 @@ const App: React.FC = () => {
           <Route path="/" element={<ProtectedRoute><MainLayout /></ProtectedRoute>}>
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="clients" element={<Clients />} />
+            <Route path="clients" element={<Navigate to="/clients/active" replace />} />
+            <Route path="clients/active" element={<Clients statusFilter="active" />} />
+            <Route path="clients/inactive" element={<Clients statusFilter="inactive" />} />
             <Route path="clients/:id" element={<ClientDetail />} />
             <Route path="services" element={<Services />} />
             <Route path="payments" element={<Payments />} />

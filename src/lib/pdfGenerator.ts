@@ -16,6 +16,22 @@ interface ReceiptData {
   accountantEmail?: string;
   accountantPhone?: string;
 }
+export const getLogoBase64 = async (): Promise<string | null> => {
+  try {
+    const response = await fetch('/logo.png');
+    if (!response.ok) return null;
+    const blob = await response.blob();
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch (e) {
+    console.error('Error loading logo:', e);
+    return null;
+  }
+};
 
 export const generateReceipt = async (data: ReceiptData) => {
   console.log('STEP 2 - Enter generateReceipt()');
@@ -25,6 +41,13 @@ export const generateReceipt = async (data: ReceiptData) => {
   doc.setFontSize(22);
   doc.setTextColor(30, 58, 138); // Blue
   doc.text('REÇU DE PAIEMENT', 105, 20, { align: 'center' });
+
+  // Add Logo
+  const logoBase64 = await getLogoBase64();
+  if (logoBase64) {
+    // 35x35 mm at top right (page width is 210, so 210 - 35 - 15 margin = 160)
+    doc.addImage(logoBase64, 'PNG', 160, 10, 35, 35);
+  }
 
   // Accountant / Business Info
   doc.setFontSize(12);

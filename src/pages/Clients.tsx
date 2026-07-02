@@ -9,7 +9,11 @@ import type { Database } from '../lib/database.types';
 
 type Client = Database['public']['Tables']['clients']['Row'];
 
-const Clients: React.FC = () => {
+interface ClientsProps {
+  statusFilter: 'active' | 'inactive';
+}
+
+const Clients: React.FC<ClientsProps> = ({ statusFilter }) => {
   const { session } = useAuth();
   const { confirm } = useConfirm();
   const navigate = useNavigate();
@@ -17,7 +21,6 @@ const Clients: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
-  const [activeTab, setActiveTab] = useState<'active' | 'inactive'>('active');
 
   // Form state
   const [name, setName] = useState('');
@@ -146,12 +149,14 @@ const Clients: React.FC = () => {
     }
   };
 
-  const filteredClients = clients.filter(c => c.status === activeTab);
+  const filteredClients = clients.filter(c => c.status === statusFilter);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center mb-8">
-        <h2 className="text-2xl font-bold text-foreground">Clients</h2>
+        <h2 className="text-2xl font-bold text-foreground">
+          {statusFilter === 'active' ? 'Clients Actifs' : 'Clients Inactifs'}
+        </h2>
         <button 
           onClick={() => openModal()}
           className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg flex items-center transition-colors"
@@ -161,28 +166,7 @@ const Clients: React.FC = () => {
         </button>
       </div>
 
-      <div className="flex space-x-2 mb-6">
-        <button
-          onClick={() => setActiveTab('active')}
-          className={`px-4 py-2 rounded-lg transition-colors font-medium ${
-            activeTab === 'active' 
-              ? 'bg-blue-600 text-white' 
-              : 'bg-card border border-border text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Actifs ({clients.filter(c => c.status === 'active').length})
-        </button>
-        <button
-          onClick={() => setActiveTab('inactive')}
-          className={`px-4 py-2 rounded-lg transition-colors font-medium ${
-            activeTab === 'inactive' 
-              ? 'bg-blue-600 text-white' 
-              : 'bg-card border border-border text-muted-foreground hover:text-foreground'
-          }`}
-        >
-          Inactifs ({clients.filter(c => c.status === 'inactive').length})
-        </button>
-      </div>
+
 
       <div className="bg-card rounded-2xl border border-border overflow-hidden">
         {loading ? (
@@ -191,7 +175,7 @@ const Clients: React.FC = () => {
           </div>
         ) : filteredClients.length === 0 ? (
           <div className="p-12 text-center text-muted-foreground">
-            Aucun client {activeTab === 'active' ? 'actif' : 'inactif'} trouvé.
+            Aucun client {statusFilter === 'active' ? 'actif' : 'inactif'} trouvé.
           </div>
         ) : (
           <div className="overflow-x-auto">

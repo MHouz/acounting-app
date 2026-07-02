@@ -2,7 +2,7 @@ import React from 'react';
 import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useConfirm } from '../../contexts/ConfirmContext';
-import { LayoutDashboard, Users, Grid, CreditCard, LogOut, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
+import { LayoutDashboard, UserCheck, UserMinus, Grid, CreditCard, LogOut, Settings as SettingsIcon, RefreshCw } from 'lucide-react';
 
 const MainLayout: React.FC = () => {
   const { signOut } = useAuth();
@@ -27,7 +27,8 @@ const MainLayout: React.FC = () => {
 
   const navItems = [
     { name: 'Dashboard', path: '/dashboard', icon: LayoutDashboard },
-    { name: 'Clients', path: '/clients', icon: Users },
+    { name: 'Clients Actifs', path: '/clients/active', icon: UserCheck },
+    { name: 'Clients Inactifs', path: '/clients/inactive', icon: UserMinus },
     { name: 'Services', path: '/services', icon: Grid },
     { name: 'Paiements', path: '/payments', icon: CreditCard },
     { name: 'Paramètres', path: '/settings', icon: SettingsIcon },

@@ -2,6 +2,7 @@ import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { save } from '@tauri-apps/plugin-dialog';
 import { writeFile } from '@tauri-apps/plugin-fs';
+import { getLogoBase64 } from './pdfGenerator';
 
 export interface ReportData {
   periodLabel: string;
@@ -24,6 +25,12 @@ export const generateIncomeReport = async (data: ReportData) => {
   doc.setFontSize(22);
   doc.setTextColor(37, 99, 235); // Blue-600
   doc.text('Rapport de Revenus', 14, 20);
+  
+  // Add Logo
+  const logoBase64 = await getLogoBase64();
+  if (logoBase64) {
+    doc.addImage(logoBase64, 'PNG', 160, 10, 35, 35);
+  }
   
   // Summary Info
   doc.setFontSize(12);
